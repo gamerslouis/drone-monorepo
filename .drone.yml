@@ -1,0 +1,40 @@
+kind: pipeline
+type: kubernetes
+name: build app
+
+trigger:
+  paths:
+    include:
+      - code/*
+
+steps:
+  - name: version
+    image: alpine
+    commands:
+      - cat code/VERSION > .tags
+      - echo "\nlatest" >> .tags
+
+  - name: build
+    image: plugins/docker
+    settings:
+      repo: registry.192.168.178.48.nip.io/drone-mono-repo
+      registry: registry.192.168.178.48.nip.io
+      dockerfile: code/Dockerfile
+      insecure: true
+---
+kind: pipeline
+type: kubernetes
+name: build chart
+
+trigger:
+  paths:
+    include:
+      - "chart/*"
+
+steps:
+- name: Package chart
+  image: registry.192.168.178.48.nip.io/helm-build:latest
+  commands:
+    - helm lint chart/
+    - helm package chart/
+    - curl -X POST --data-binary @drone-monorepo-`cat chart/Chart.yaml | grep "version:" | cut -d " " -f 2`.tgz -k https://charts.192.168.178.48.nip.io/api/charts
