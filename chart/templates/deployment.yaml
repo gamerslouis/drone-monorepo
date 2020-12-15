@@ -32,6 +32,7 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          # command: ["/bin/sh", "-c", "tail -f /dev/null"]
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -39,15 +40,19 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
+            - name: PYTHONBUFFERED
+              value: "1"
+            - name: LOG_LEVEL
+              value: DEBUG
             - name: CONFIG_PATH
               value: {{ include "drone-monorepo.config_path" . }}
           volumeMounts:

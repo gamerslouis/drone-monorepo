@@ -1,6 +1,6 @@
 kind: pipeline
 type: kubernetes
-name: build app
+name: Docker build
 
 trigger:
   paths:
@@ -11,20 +11,19 @@ steps:
   - name: version
     image: alpine
     commands:
-      - cat code/VERSION > .tags
-      - echo "\nlatest" >> .tags
+      - printf "`cat code/VERSION`,latest" > .tags
 
   - name: build
     image: plugins/docker
     settings:
-      repo: registry.192.168.178.48.nip.io/drone-mono-repo
+      repo: registry.192.168.178.48.nip.io/drone-monorepo
       registry: registry.192.168.178.48.nip.io
       dockerfile: code/Dockerfile
       insecure: true
 ---
 kind: pipeline
 type: kubernetes
-name: build chart
+name: Chart build
 
 trigger:
   paths:
@@ -32,7 +31,7 @@ trigger:
       - "chart/*"
 
 steps:
-- name: Package chart
+- name: Package and push chart
   image: registry.192.168.178.48.nip.io/helm-build:latest
   commands:
     - helm lint chart/
