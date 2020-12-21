@@ -14,12 +14,14 @@ steps:
       - printf "`cat code/VERSION`,latest" > .tags
 
   - name: build
-    image: plugins/docker
+    image: registry.192.168.178.48.nip.io/drone-kaniko
     settings:
-      repo: registry.192.168.178.48.nip.io/drone-monorepo
-      registry: registry.192.168.178.48.nip.io
-      dockerfile: code/Dockerfile
-      insecure: true
+      username: tiago
+      password: empty
+      repo: registry-docker-registry.tools.svc.cluster.local:5000/drone-monorepo
+      registry: registry-docker-registry.tools.svc.cluster.local:5000/
+      dockerfile: ./code/Dockerfile
+      context: ./code
 ---
 kind: pipeline
 type: kubernetes
@@ -36,4 +38,4 @@ steps:
   commands:
     - helm lint chart/
     - helm package chart/
-    - curl -X POST --data-binary @drone-monorepo-`cat chart/Chart.yaml | grep "version:" | cut -d " " -f 2`.tgz -k https://charts.192.168.178.48.nip.io/api/charts
+    - curl -X POST --data-binary @drone-monorepo-`cat chart/Chart.yaml | grep "version:" | cut -d " " -f 2`.tgz -k https://charts.tiagoposse.com/api/charts

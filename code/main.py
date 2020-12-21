@@ -6,6 +6,11 @@ app = Flask(__name__)
 
 headers = {}
 
+def replacements(path, text):
+  text.replace('<current_path>', '/'.join(path.split('/')[:-1]))
+
+  return text
+
 def get_included_pipeline(repo, commit, path):
   app.logger.debug(f"Including: { repo }/contents/{ path }?ref={ commit }")
   resp = requests.get(f"https://api.github.com/repos/{ repo }/contents/{ path }?ref={ commit }", headers=headers).json()
@@ -14,7 +19,8 @@ def get_included_pipeline(repo, commit, path):
     app.logger.info(f"Couldn't load pipeline { path }")
     return ""
   else:
-    return yaml.safe_load(base64.b64decode(resp['content']).decode('utf-8'))
+    pipeline_text = replacements(path, base64.b64decode(resp['content']).decode('utf-8'))
+    return yaml.safe_load(pipeline_text)
 
 @app.route('/healthz', methods=['GET'])
 def handle_health():
