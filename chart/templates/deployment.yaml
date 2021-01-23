@@ -32,20 +32,21 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          # command: ["/bin/sh", "-c", "tail -f /dev/null"]
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
+            - name: mono
               containerPort: 3000
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz
-              port: http
+              port: mono
+              scheme: HTTPS
           readinessProbe:
             httpGet:
               path: /healthz
-              port: http
+              port: mono
+              scheme: HTTPS
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
@@ -55,6 +56,10 @@ spec:
               value: DEBUG
             - name: CONFIG_PATH
               value: {{ include "drone-monorepo.config_path" . }}
+            {{- range $name, $value := .Values.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value }}
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: /config

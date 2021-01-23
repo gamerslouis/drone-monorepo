@@ -147,4 +147,7 @@ if __name__ == '__main__':
 
   app.logger.setLevel(logging.getLevelName(os.environ['LOG_LEVEL']))
 
-  app.run(host='0.0.0.0', port=3000)
+  if 'TLS_CERT_PATH' in os.environ and 'TLS_KEY_PATH' in os.environ:
+    app.run(host='0.0.0.0', port=3000, ssl_context=(os.environ['TLS_CERT_PATH'], os.environ['TLS_KEY_PATH']))
+  else:
+    app.run(host='0.0.0.0', port=3000)

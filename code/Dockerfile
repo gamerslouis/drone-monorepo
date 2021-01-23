@@ -1,4 +1,4 @@
-FROM arm64v8/python
+FROM python:3.9-slim
 
 COPY requirements.txt main.py VERSION /app/
 

@@ -9,7 +9,7 @@ secret_path: ""
 replicaCount: 1
 
 image:
-  repository: registry.192.168.178.48.nip.io/drone-monorepo
+  repository: drone-monorepo
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -17,6 +17,8 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+extraEnv: {}
 
 serviceAccount:
   # Specifies whether a service account should be created

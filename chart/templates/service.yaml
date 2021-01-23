@@ -8,8 +8,8 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: mono
       protocol: TCP
-      name: http
+      name: mono
   selector:
     {{- include "drone-monorepo.selectorLabels" . | nindent 4 }}
