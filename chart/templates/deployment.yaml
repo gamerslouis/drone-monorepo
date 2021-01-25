@@ -31,7 +31,7 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: mono
@@ -54,15 +54,12 @@ spec:
               value: "1"
             - name: LOG_LEVEL
               value: DEBUG
-            - name: CONFIG_PATH
-              value: {{ include "drone-monorepo.config_path" . }}
+            - name: TOKEN_PATH
+              value: {{ .Values.github_token_path }}
             {{- range $name, $value := .Values.extraEnv }}
             - name: {{ $name }}
               value: {{ $value }}
             {{- end }}
-          volumeMounts:
-            - name: config
-              mountPath: /config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -75,7 +72,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      volumes:
-        - name: config
-          configMap:
-            name: {{ include "drone-monorepo.fullname" . }}-cm
