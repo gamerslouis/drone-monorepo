@@ -7,25 +7,29 @@ platform:
   arch: arm
 
 trigger:
-  branch:
-  - main
-
-build: &build
-  name: build
-  image: registry.tiagoposse.com/kaniko-arm:1.2.0
-  commands:
-    - printf "`cat code/VERSION`,latest" > .tags
-    - /kaniko/executor --dockerfile=./code/Dockerfile --context=code  --cache=true --cache-repo=registry.tiagoposse.com/drone-monorepo --destination=registry.tiagoposse.com/drone-monorepo
+    branch:
+      - main
+    paths:
+      - code/VERSION
 
 steps:
-  - <<: *build
-    when:
-      paths:
-        - code/VERSION
+  - name: build
+    image: registry.tiagoposse.com/kaniko-arm:1.2.0
+    commands:
+      - |
+        if [ "$DRONE_BRANCH" != "main" ]
+        then
+          VERSIONS="$(cat code/VERSION)-dev,latest-dev"
+        else
+          VERSIONS="$(cat code/VERSION),latest"
+        fi
+        printf "$VERSIONS" > .tags
+      - cat .tags
+      - >
+        /kaniko/executor --dockerfile=./code/Dockerfile --context=./code
+        --cache=true --cache-repo=registry.tiagoposse.com/drone-monorepo
+        -d=registry.tiagoposse.com/drone-monorepo
 
-  - <<: *build
-    when:
-      event: custom
 ---
 kind: pipeline
 type: kubernetes
@@ -33,10 +37,9 @@ name: Chart build
 
 trigger:
   paths:
-    include:
-      - "chart/*"
+    - chart/Chart.yaml
   branch:
-  - main
+    - main
 
 platform:
   os: linux

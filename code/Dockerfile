@@ -4,6 +4,6 @@ COPY requirements.txt /app/
 
 RUN pip install -r /app/requirements.txt
 
-COPY main.py VERSION /app/
+COPY *.py VERSION /app/
 
 ENTRYPOINT ["python", "/app/main.py"]
