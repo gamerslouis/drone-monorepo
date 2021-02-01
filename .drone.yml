@@ -17,18 +17,19 @@ steps:
     image: registry.tiagoposse.com/kaniko-arm:1.2.0
     commands:
       - |
+        export VERSION="$(cat code/VERSION)"
+        export LATEST="latest"
         if [ "$DRONE_BRANCH" != "main" ]
         then
-          VERSIONS="$(cat code/VERSION)-dev,latest-dev"
-        else
-          VERSIONS="$(cat code/VERSION),latest"
+          export VERSION="$VERSION-dev"
+          export LATEST="$LATEST-dev"
         fi
-        printf "$VERSIONS" > .tags
-      - cat .tags
+      - echo $VERSION
       - >
         /kaniko/executor --dockerfile=./code/Dockerfile --context=./code
         --cache=true --cache-repo=registry.tiagoposse.com/drone-monorepo
-        -d=registry.tiagoposse.com/drone-monorepo
+        -d=registry.tiagoposse.com/drone-monorepo:latest
+        -d=registry.tiagoposse.com/drone-monorepo:$VERSION
 
 ---
 kind: pipeline

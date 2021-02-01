@@ -7,18 +7,14 @@ logger = logging.getLogger("monorepo")
 
 
 class Github:
-    def __init__(self, repo, before_commit, after_commit, token):
+    def __init__(self, token):
         self.token = token
-        self.repo = repo
-        self.before_commit = before_commit
-        self.commit = after_commit
         self.headers = {"Authorization": f"token { token }"}
-        self.commit_changed_files = None
 
-    def get_included_pipeline(self, path):
-        logger.debug(f"Including: { self.repo }/contents/{ path }?ref={ self.commit }")
+    def get_included_pipeline(self, path, repo, commit):
+        logger.debug(f"Including: { repo }/contents/{ path }?ref={ commit }")
         resp = requests.get(
-            f"https://api.github.com/repos/{ self.repo }/contents/{ path }?ref={ self.commit }",
+            f"https://api.github.com/repos/{ repo }/contents/{ path }?ref={ commit }",
             headers=self.headers,
         ).json()
 
@@ -32,12 +28,9 @@ class Github:
             )
             return yaml.safe_load(pipeline_text)
 
-    def get_commit_changed_files(self):
-        if self.commit_changed_files is not None:
-            return self.commit_changed_files
-
+    def get_commit_changed_files(self, repo, before, after):
         rep = requests.get(
-            f"https://api.github.com/repos/{ self.repo }/compare/{ self.before_commit }...{ self.commit }",
+            f"https://api.github.com/repos/{ repo }/compare/{ before }...{ after }",
             headers=self.headers,
         )
 

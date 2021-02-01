@@ -1,20 +1,37 @@
 #!/bin/python3
 
 import logging
+import json
 import os
 import yaml
 from flask import Flask, request, jsonify
 
-from monorepo import Monorepo
-from github import Github
+from parsers.includes import IncludesParser
+from parsers.paths import PathsChangedParser
+from parsers.trigger_groups import TriggerGroupsParser
+from backends.github import Github
+from models.pipelines import Pipeline
 
+from monorepo import Monorepo
 
 app = Flask("monorepo")
 app.logger.setLevel(logging.getLevelName(os.environ["LOG_LEVEL"]))
 
+from json import JSONEncoder
+
+def _default(self, obj):
+    return getattr(obj.__class__, "to_json", _default.default)(obj)
+
+_default.default = JSONEncoder().default
+JSONEncoder.default = _default
+
+mono = None
+ghub = None
 
 with open(os.environ["TOKEN_PATH"], "r") as f:
     token = f.read().strip()
+
+mono = Monorepo(Github(token))
 
 
 @app.route("/healthz", methods=["GET"])
@@ -26,58 +43,46 @@ def handle_health():
 def handle():
     body = request.get_json(force=True)
 
-    repo = body["repo"]["slug"]
-    before = body["build"]["before"]
-    after = body["build"]["after"]
-    if before == after:
-        before = f"{ before }~1"
+    raw_pipelines = body["config"]["data"].split("---")
 
-    ghub = Github(repo, before, after, token)
+    init_pipelines = [ Pipeline(yaml.safe_load(r)) for r in raw_pipelines if r != ""]
+    # app.logger.debug("Parse the following pipelines:")
+    # app.logger.debug(init_pipelines)
 
-    mono = Monorepo(ghub)
-    return_pipelines = []
-    base_pipeline = None
-    pipelines_to_process = body["config"]["data"].split("---")
+    base_pipeline = init_pipelines[0].clone()
 
-    while len(pipelines_to_process) > 0:
-        pipe = pipelines_to_process.pop(0)
-        if isinstance(pipe, str):
-          pipe = yaml.safe_load(pipe)
+    parsers = [
+      IncludesParser(mono.get_backend(), body),
+      TriggerGroupsParser(mono.get_backend(), body),
+      PathsChangedParser(mono.get_backend(), body)
+    ]
 
-        if not pipe:
-            app.logger.debug("skip pipeline processing")
-            continue
-        elif base_pipeline is None:
-            base_pipeline = pipe.copy()
+    mono.set_parsers(parsers)
+    pipelines = mono.parse_pipelines(init_pipelines)
 
-        app.logger.debug(f"Parse { pipe['name'] }")
-
-        result, returned = mono.parse_pipeline(pipe)
-
-        if result:
-            app.logger.debug("Returned: ")
-            app.logger.debug(returned)
-            if len(returned) > 1:
-                pipelines_to_process += returned
-            else:
-                return_pipelines.append(yaml.safe_dump(pipe))
-
-    if len(return_pipelines) > 0:
+    if len(pipelines) > 0:
       app.logger.debug("Returning the following pipelines:")
-      app.logger.debug("\n---\n".join(return_pipelines))
-      return jsonify({"data": "\n---\n".join(return_pipelines)})
+      # for r in pipelines:
+      #   app.logger.debug(json.dumps(r))
+      app.logger.debug("\n---\n".join([p.to_text() for p in pipelines ]))
+      return jsonify({"data": "\n---\n".join([p.to_text() for p in pipelines ])})
     else:
-      empty = { key: value for key, value in base_pipeline.items() if key not in ["trigger", "triggers", "steps"] }
-
-      empty['name'] = "empty"
-      empty["steps"] = [{
-        "name": "empty",
-        "image": "busybox",
-        "commands": ["echo 'This build has no steps to execute.'"]
-      }]
       app.logger.debug("empty pipeline")
-
-      return jsonify({"data": yaml.safe_dump(empty) })
+      app.logger.debug(base_pipeline)
+      return jsonify(
+        {
+          "data": str(Pipeline({
+            'name': 'empty',
+            'steps': [{
+              "name": "empty",
+              "image": "busybox",
+              "commands": ["echo 'This build has no steps to execute.'"]
+            }],
+            'type': base_pipeline.get_type(),
+            'kind': 'pipeline'
+          }))
+        }
+      )
 
 
 if __name__ == "__main__":

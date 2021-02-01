@@ -1,106 +1,101 @@
 import logging
-from triggers import parse_triggers
+
+from models.pipelines import Pipeline
 
 logger = logging.getLogger("monorepo")
 
 
 class Monorepo:
-    def __init__(self, github):
-        self.ghub = github
+    def __init__(self, backend):
+        self.__backend = backend
+        self.__pipeline_parsers = []
+        self.__step_parsers = []
 
-    def parse_pipeline(self, pipe):
-        # app.logger.debug("Parsing pipeline:")
-        # app.logger.debug(pipe)
+    def set_parsers(self, parsers):
+        self.__pipeline_parsers = []
+        self.__step_parsers = []
 
-        if "include_pipeline" in pipe:
-            included = self.ghub.get_included_pipeline(pipe["include_pipeline"])
-            del pipe["include_pipeline"]
-
-            if included != "":
-                pipe = __merge_pipeline(pipe, included)
-
-        pipeline_triggers = []
-        if "trigger" in pipe:
-            pipeline_triggers.append(pipe["trigger"])
-            del pipe['trigger']
-
-        if "triggers" in pipe:
-            pipeline_triggers += pipe["triggers"]
-            del pipe["triggers"]
-
-        final_triggers = parse_triggers(
-            pipeline_triggers, self.ghub.get_commit_changed_files()
-        )
-
-        logger.debug("Pipeline triggers to proceed with")
-        logger.debug(final_triggers)
-        if len(final_triggers) == 0 and len(pipeline_triggers) > 0:
-            return False, []
-
-        # From here on out, the triggers of the main pipeline have been approved
-        if "steps" in pipe:
-            pipeline_steps = []
-            for step in pipe["steps"]:
-                logger.debug("Parsing step")
-                logger.debug(step)
-                modified_step = step.copy()
-
-                if "when" in step:
-                    if isinstance(step["when"], dict):
-                      step["when"] = [step["when"]]
-
-                    for index, t in enumerate(parse_triggers(
-                        step["when"], self.ghub.get_commit_changed_files()
-                    )):
-                        if index > 0:
-                          modified_step['name'] = f"{ modified_step['name'] }-{ index }"
-
-                        modified_step["when"] = t
-                        pipeline_steps.append(modified_step)
-                else:
-                    pipeline_steps.append(step)
-
-            if len(pipeline_steps) > 0:
-                pipe["steps"] = pipeline_steps
-            else:
-                return False, []
-
-        pipelines = []
-        pipeline_name = pipe['name']
-        for index, t in enumerate(final_triggers):
-            pipe["trigger"] = t
-            if index > 0:
-              pipe['name'] = f"{ pipeline_name }-{ index }"
-
-            pipelines.append(pipe)
-
-        return True, pipelines
+        for p in parsers:
+            if p.is_pipeline_parser:
+                self.__pipeline_parsers.append(p)
+            
+            if p.is_step_parser:
+                self.__step_parsers.append(p)
 
 
-def __merge_pipeline(base, target):
-    merged_pipeline = base.copy()
+    def get_backend(self):
+        return self.__backend
 
-    for k, v in target.items():
-        if k in merged_pipeline:
-            if isinstance(v, str):
-                merged_pipeline[k] = v
-            elif isinstance(v, list):
-                merged_pipeline[k] = merged_pipeline[k] + v
-            elif isinstance(v, dict):
-                merged_pipeline[k] = __merge_dict(merged_pipeline[k], v, __merge_dict)
-        else:
-            merged_pipeline[k] = v
+    def parse_pipelines(self, pipelines_to_process):
+      return_pipelines = []
 
-    return merged_pipeline
+      logger.debug('Starting to parse.')
+      while len(pipelines_to_process) > 0:
+          pipe = pipelines_to_process.pop(0)
+
+          if not pipe:
+              logger.debug("skip pipeline processing")
+              continue
+
+          add_pipelines = self.parse_pipeline(pipe)
+
+          if len(add_pipelines) > 1:
+              pipelines_to_process += add_pipelines
+          else:
+              return_pipelines += add_pipelines
+  
+      return return_pipelines
 
 
-def __merge_dict(a, b, func):
-    final = a.copy()
-    for k, v in b.items():
-        if k in final:
-            if isinstance(v, dict):
-                final[k] = func(final[k], v, func)
-            else:
-                final[k] = v
+    def parse_pipeline(self, pipe) -> list[Pipeline]:
+      ''' Call all registered parsers that receive a pipeline '''
 
-    return final
+      steps_to_process = pipe.get_steps()
+      return_steps = []
+      while len(steps_to_process) > 0:
+          step = steps_to_process.pop(0)
+
+          for parser in self.__step_parsers:
+              add_steps = parser.parse_step(step)
+              step = None
+              if len(add_steps) == 1:
+                  step = add_steps[0]
+              elif len(add_steps) > 1:
+                  steps_to_process += add_steps
+                  break
+              elif len(add_steps) == 0:
+                  break
+
+          if step != None:
+              return_steps.append(step)
+
+      pipe.set_steps(return_steps)
+
+      pipelines_to_process = [pipe]
+      return_pipelines = []
+
+      while len(pipelines_to_process) > 0:
+          pipe = pipelines_to_process.pop(0)
+          logger.debug("Parsing pipeline: ")
+          logger.debug(pipe)
+
+          if not pipe:
+              logger.debug("skip pipeline processing")
+              continue
+
+          for parser in self.__pipeline_parsers:
+              add_pipelines = parser.parse_pipeline(pipe)
+              pipe = None
+
+              if len(add_pipelines) == 1:
+                  pipe = add_pipelines[0]
+              elif len(add_pipelines) > 1:
+                  pipelines_to_process += add_pipelines
+                  break
+              elif len(add_pipelines) == 0:
+                  break
+
+          if pipe != None:
+              return_pipelines.append(pipe)
+
+      return return_pipelines
