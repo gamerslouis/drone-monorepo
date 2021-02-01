@@ -35,7 +35,8 @@ class Github:
         )
 
         logger.debug(f"Response from github: { str(rep.status_code) }")
-
+        [logger.debug(f["filename"]) for f in rep.json()["files"]]
+         
         if rep.status_code == 404:
             return []
         else:

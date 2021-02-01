@@ -56,6 +56,10 @@ spec:
               value: DEBUG
             - name: TOKEN_PATH
               value: {{ .Values.github_token_path }}
+            - name: DEFAULT_PIPELINE_TYPE
+              value: {{ default "kubernetes" .Values.default_pipeline_type }}
+            - name: DEFAULT_PLATFORM
+              value: {{ default "linux-amd64" .Values.default_platform }}
             {{- range $name, $value := .Values.extraEnv }}
             - name: {{ $name }}
               value: {{ $value }}

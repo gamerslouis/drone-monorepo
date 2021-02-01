@@ -3,6 +3,8 @@
 # Declare variables to be passed into your templates.
 
 github_token_path: ""
+default_pipeline_type: kubernetes
+default_platform: linux-arm64
 
 replicaCount: 1
 

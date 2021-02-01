@@ -1,7 +1,6 @@
 #!/bin/python3
 
 import logging
-import json
 import os
 import yaml
 from flask import Flask, request, jsonify
@@ -9,8 +8,10 @@ from flask import Flask, request, jsonify
 from parsers.includes import IncludesParser
 from parsers.paths import PathsChangedParser
 from parsers.trigger_groups import TriggerGroupsParser
+from parsers.target_pipelines import TargetPipelineParser
 from backends.github import Github
 from models.pipelines import Pipeline
+from models.steps import Step
 
 from monorepo import Monorepo
 
@@ -24,9 +25,6 @@ def _default(self, obj):
 
 _default.default = JSONEncoder().default
 JSONEncoder.default = _default
-
-mono = None
-ghub = None
 
 with open(os.environ["TOKEN_PATH"], "r") as f:
     token = f.read().strip()
@@ -43,18 +41,30 @@ def handle_health():
 def handle():
     body = request.get_json(force=True)
 
+    others = []
     raw_pipelines = body["config"]["data"].split("---")
+    app.logger.debug("Pipelines:")
 
-    init_pipelines = [ Pipeline(yaml.safe_load(r)) for r in raw_pipelines if r != ""]
-    # app.logger.debug("Parse the following pipelines:")
-    # app.logger.debug(init_pipelines)
+    init_pipelines = []
+    for r in raw_pipelines:
+      if r == "":
+        continue
+      
+      # app.logger.debug(f"|{ r }|")
+      parsed = yaml.safe_load(r)
+      if parsed is None:
+          continue
+      elif 'kind' in parsed and parsed['kind'] != "pipeline":
+          others.append(r)
+          continue
 
-    base_pipeline = init_pipelines[0].clone()
+      init_pipelines.append(Pipeline(parsed))
 
     parsers = [
       IncludesParser(mono.get_backend(), body),
       TriggerGroupsParser(mono.get_backend(), body),
-      PathsChangedParser(mono.get_backend(), body)
+      PathsChangedParser(mono.get_backend(), body),
+      TargetPipelineParser(mono.get_backend(), body)
     ]
 
     mono.set_parsers(parsers)
@@ -62,25 +72,32 @@ def handle():
 
     if len(pipelines) > 0:
       app.logger.debug("Returning the following pipelines:")
-      # for r in pipelines:
-      #   app.logger.debug(json.dumps(r))
-      app.logger.debug("\n---\n".join([p.to_text() for p in pipelines ]))
-      return jsonify({"data": "\n---\n".join([p.to_text() for p in pipelines ])})
+      app.logger.debug("\n---\n".join([yaml.safe_dump(p.to_json()) for p in pipelines ] + [o for o in others]))
+  
+      return jsonify({"data": "\n---\n".join([yaml.safe_dump(p.to_json()) for p in pipelines ] + [o for o in others])})
     else:
       app.logger.debug("empty pipeline")
-      app.logger.debug(base_pipeline)
+
+      empty = {
+        'name': 'empty',
+        'steps': [{
+          'name': 'empty',
+          'image': 'busybox',
+          'commands': ["echo 'This build has no steps to execute.'"]
+        }],
+        'kind': 'pipeline',
+        'type': os.environ['DEFAULT_PIPELINE_TYPE'],
+        'platform': {
+            'os': os.environ['DEFAULT_PLATFORM'].split('-')[0],
+            'arch':  os.environ['DEFAULT_PLATFORM'].split('-')[1]
+        }
+      }
+
+      app.logger.debug(empty)
+
       return jsonify(
         {
-          "data": str(Pipeline({
-            'name': 'empty',
-            'steps': [{
-              "name": "empty",
-              "image": "busybox",
-              "commands": ["echo 'This build has no steps to execute.'"]
-            }],
-            'type': base_pipeline.get_type(),
-            'kind': 'pipeline'
-          }))
+          "data": yaml.safe_dump(empty)
         }
       )
 

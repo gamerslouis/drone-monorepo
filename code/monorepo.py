@@ -84,6 +84,7 @@ class Monorepo:
               continue
 
           for parser in self.__pipeline_parsers:
+              logger.debug("Execute parser: " + str(parser.__class__))
               add_pipelines = parser.parse_pipeline(pipe)
               pipe = None
 

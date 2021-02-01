@@ -1,12 +1,15 @@
 import fnmatch
 import logging
+import re
 from models.pipelines import Pipeline
 from models.steps import Step
+
+from parsers.base_parser import BaseParser
 
 logger = logging.getLogger("monorepo")
 
 
-class PathsChangedParser:
+class PathsChangedParser(BaseParser):
     def __init__(self, backend, req):
         repo = req["repo"]["slug"]
         before = req["build"]["before"]
@@ -22,18 +25,18 @@ class PathsChangedParser:
     def parse_pipeline(self, pipe: Pipeline) -> list[Pipeline]:
         trigger = pipe.get_trigger()
         if 'paths' in trigger:
-            if not self.__parse_trigger(trigger['paths']):
+            if not self.__parse_trigger(trigger['paths'], pipe):
                 return []
               
             del trigger['paths']
             pipe.set_trigger(trigger)
-        
+
         return [pipe]
 
     def parse_step(self, step: Step) -> list[Step]:
         when = step.get_when()
         if 'paths' in when:
-            if not self.__parse_trigger(when['paths']):
+            if not self.__parse_trigger(when['paths'], step):
                 return []
             
             del when['paths']
@@ -41,7 +44,19 @@ class PathsChangedParser:
         
         return [step]    
 
-    def __parse_trigger(self, trigger):
+    def __parse_pattern(self, pattern, target):
+      m = re.match('.*?<(.+?)>.*', pattern)
+      if m is None:
+        return pattern
+
+      path = m.group(1).split('.')
+      val = target.get_info(path[0])
+      for p in path[1:]:
+        val = val[p]
+
+      return re.sub('<.+?>', val, pattern)
+
+    def __parse_trigger(self, trigger, target):
         if isinstance(trigger, str):
             trigger = {"include": [trigger]}
         if isinstance(trigger, list):  # otherwise its {include:[...],exclude:[...]}
@@ -51,7 +66,7 @@ class PathsChangedParser:
             logger.debug("Excludes: " + ",".join(trigger["exclude"]))
             for p in self.commit_changed_files:
                 for pat in trigger["exclude"]:
-                    if fnmatch.fnmatch(p, pat):
+                    if fnmatch.fnmatch(p, self.__parse_pattern(pat, target)):
                         logger.debug("excluding due to matching " + p + " with " + pat)
                         return False
 
@@ -59,7 +74,7 @@ class PathsChangedParser:
             logger.debug("Includes: " + ",".join(trigger["include"]))
             for p in self.commit_changed_files:
                 for pat in trigger["include"]:
-                    if fnmatch.fnmatch(p, pat):
+                    if fnmatch.fnmatch(p, self.__parse_pattern(pat, target)):
                         logger.debug("matching: " + p + " with " + pat)
                         return True
 
