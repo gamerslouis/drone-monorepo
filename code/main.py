@@ -26,9 +26,6 @@ def _default(self, obj):
 _default.default = JSONEncoder().default
 JSONEncoder.default = _default
 
-with open(os.environ["TOKEN_PATH"], "r") as f:
-    token = f.read().strip()
-
 mono = Monorepo(None)
 
 
