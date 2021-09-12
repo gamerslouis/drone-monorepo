@@ -29,7 +29,7 @@ JSONEncoder.default = _default
 with open(os.environ["TOKEN_PATH"], "r") as f:
     token = f.read().strip()
 
-mono = Monorepo(Github(token))
+mono = Monorepo(None)
 
 
 @app.route("/healthz", methods=["GET"])
@@ -61,9 +61,7 @@ def handle():
       init_pipelines.append(Pipeline(parsed))
 
     parsers = [
-      IncludesParser(mono.get_backend(), body),
       TriggerGroupsParser(mono.get_backend(), body),
-      PathsChangedParser(mono.get_backend(), body),
       TargetPipelineParser(mono.get_backend(), body)
     ]
 
