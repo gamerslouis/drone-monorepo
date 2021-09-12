@@ -1,14 +1,17 @@
 from utils.utils import merge_dict
 import json
+import copy
 
 class Step(json.JSONEncoder):
     def __init__(self, step):
-        self.__name = step["name"]
-        self.__commands = step['commands'] if 'commands' in step else []
-        self.__settings = step['settings'] if 'settings' in step else {}
-        self.__environment = step['environment'] if 'environment' in step else {}
-        self.__image = step['image']
-        self.__when = step["when"] if "when" in step else {}
+        _step = copy.deepcopy(step)
+        self.__name = _step.pop("name")
+        self.__commands = _step.pop('commands', [])
+        self.__settings = _step.pop('settings', {})
+        self.__environment = _step.pop('environment', {})
+        self.__image = _step.pop("image")
+        self.__when = _step.pop('when', {})
+        self.__others = _step
 
     def set_when(self, when):
         self.__when = when
@@ -32,7 +35,8 @@ class Step(json.JSONEncoder):
             'commands': self.__commands,
             'settings': self.__settings,
             'environment': self.__environment,
-            'when': self.__when
+            'when': self.__when,
+            **self.__others
         }
 
     def get_info(self, attr):
